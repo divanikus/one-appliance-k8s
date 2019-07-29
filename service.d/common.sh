@@ -192,18 +192,17 @@ EOF
 #   starting at the first colon (:) and up to the first hyphen (-)
 # example:
 #   3:18.09.1-3.el7 -> 18.09.1
-yum_pkg_filter()
+apt_pkg_filter()
 {
     _pkg="$1"
     _version="$2"
 
     awk -v pkg="$_pkg" '{if ($1 ~ "^" pkg) print $2;}' | \
-    sed -e 's/^[^:]*://' -e 's/-.*//' | \
     if [ -n "$_version" ] ; then
         # only the correct versions
         awk -v version="$_version" '
         {
-            if ($1 ~ "^" version)
+            if ($1 ~ version)
                 print $1;
         }'
     else

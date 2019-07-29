@@ -32,10 +32,10 @@ ONE_SERVICE_PARAMS=(
 
 ### Appliance metadata ########################################################
 
-ONE_SERVICE_NAME='Service Kubernetes - KVM'
-ONE_SERVICE_VERSION=1.13
+ONE_SERVICE_NAME='Service Kubernetes - LXD'
+ONE_SERVICE_VERSION=1.15
 ONE_SERVICE_BUILD=$(date +%s)
-ONE_SERVICE_SHORT_DESCRIPTION='Appliance with preinstalled Kubernetes for KVM hosts'
+ONE_SERVICE_SHORT_DESCRIPTION='Appliance with preinstalled Kubernetes for LXD hosts'
 ONE_SERVICE_DESCRIPTION=$(cat <<EOF
 Appliance with preinstalled Kubernetes. If you don't provide a token and a hash
 the appliance will bootstrap in a single-node mode and the running instance will
@@ -93,7 +93,7 @@ ONEAPP_K8S_PORT="${ONEAPP_K8S_PORT:-6443}"
 ONEAPP_K8S_PODS_NETWORK="${ONEAPP_K8S_PODS_NETWORK:-10.244.0.0/16}"
 ONEAPP_K8S_ADMIN_USERNAME="${ONEAPP_K8S_ADMIN_USERNAME:-admin-user}"
 ONEAPP_DOCKER_EDITION="${ONEAPP_DOCKER_EDITION:-docker-ce}" # docker-ee
-ONEAPP_DOCKER_VERSION=${ONEAPP_DOCKER_VERSION:-18.06}
+ONEAPP_DOCKER_VERSION=${ONEAPP_DOCKER_VERSION:-18.09}
 ONEAPP_ONEFLOW_MASTER_ROLE="${ONEAPP_ONEFLOW_MASTER_ROLE:-master}"
 #ONEAPP_K8S_NODENAME
 #ONEAPP_K8S_ADDRESS
@@ -103,7 +103,7 @@ ONEAPP_ONEFLOW_MASTER_ROLE="${ONEAPP_ONEFLOW_MASTER_ROLE:-master}"
 
 ### Globals ###################################################################
 
-DEP_PKGS="coreutils openssh-server curl jq openssl ca-certificates yum-utils yum-versionlock device-mapper-persistent-data lvm2"
+DEP_PKGS="coreutils openssh-server curl jq openssl ca-certificates apt-transport-https gnupg2 software-properties-common"
 
 
 
@@ -198,15 +198,23 @@ install_docker()
     case "$_edition" in
         docker-ce)
             msg info "Installing Docker Community Edition (CE) repository"
-            yum-config-manager --add-repo \
-                https://download.docker.com/linux/centos/docker-ce.repo
+            curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
+
+            add-apt-repository \
+                "deb [arch=amd64] https://download.docker.com/linux/debian \
+                $(lsb_release -cs) \
+                stable"
+            apt update
             ;;
         docker-ee)
             if [ -n "$ONEAPP_DOCKER_EE_URL" ] ; then
                 msg info "Installing Docker Enterprise Edition (EE) repository"
-                echo "$ONEAPP_DOCKER_EE_URL/centos" > /etc/yum/vars/dockerurl
-                yum-config-manager --add-repo \
-                    "$ONEAPP_DOCKER_EE_URL"/centos/docker-ee.repo
+                curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
+                add-apt-repository \
+                    "deb [arch=amd64] $ONEAPP_DOCKER_EE_URL/debian \
+                    $(lsb_release -cs) \
+                    stable"
+                apt update
             else
                 msg error "Missing Docker-EE URL: https://docs.docker.com/install/linux/docker-ee/centos/#find-your-docker-ee-repo-url"
                 return 1
@@ -221,9 +229,9 @@ install_docker()
     _version="$ONEAPP_DOCKER_VERSION"
     case "$_version" in
         ''|latest)
-            _version=$(yum -y --showduplicates list "$_edition" | \
-                yum_pkg_filter "$_edition" | \
-                tail -n 1)
+            _version=$(apt -a list "$_edition" | \
+                apt_pkg_filter "$_edition" | \
+                head -n 1)
 
             if [ -z "$_version" ] ; then
                 msg error "Failed to detect the latest ${_edition} version"
@@ -231,9 +239,9 @@ install_docker()
             fi
             ;;
         *)
-            _version=$(yum -y --showduplicates list "$_edition" | \
-                yum_pkg_filter "$_edition" "$_version" | \
-                tail -n 1)
+            _version=$(apt -a list "$_edition" | \
+                apt_pkg_filter "$_edition" "$_version" | \
+                head -n 1)
 
             if [ -z "$_version" ] ; then
                 msg error "Failed to find the '${ONEAPP_DOCKER_VERSION}' docker version"
@@ -242,9 +250,9 @@ install_docker()
             ;;
     esac
 
-    msg info "Installing '${_edition}-${_version}'"
-    install_pkgs "${_edition}-${_version}"
-    yum -y versionlock "${_edition}"
+    msg info "Installing '${_edition}=${_version}'"
+    install_pkgs "${_edition}=${_version}" "${_edition}-cli=${_version}" "containerd.io"
+    apt-mark hold "${_edition}" "${_edition}-cli" "containerd.io"
 }
 
 configure_docker()
@@ -296,24 +304,19 @@ enable_docker()
 install_kubernetes()
 {
     msg info "Install kubernetes repo"
-    cat <<EOF > /etc/yum.repos.d/kubernetes.repo
-[kubernetes]
-name=Kubernetes
-baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
-enabled=1
-gpgcheck=1
-repo_gpgcheck=1
-gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-exclude=kube*
-EOF
-
+    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+    add-apt-repository \
+        "deb https://apt.kubernetes.io/ \
+        kubernetes-xenial \
+        main"
+    apt update
     _version="$ONE_SERVICE_VERSION"
     case "$_version" in
         ''|latest)
-            _version=$(yum -y --showduplicates --disableexcludes=kubernetes \
+            _version=$(apt -a \
                 list kubelet | \
-                yum_pkg_filter kubelet | \
-                tail -n 1)
+                apt_pkg_filter kubelet | \
+                head -n 1)
 
             if [ -z "$_version" ] ; then
                 msg error "Failed to detect the latest kubernetes version"
@@ -323,10 +326,10 @@ EOF
             ONE_SERVICE_VERSION="$_version"
             ;;
         *)
-            _version=$(yum -y --showduplicates --disableexcludes=kubernetes \
+            _version=$(apt -a \
                 list kubelet | \
-                yum_pkg_filter kubelet "$_version" | \
-                tail -n 1)
+                apt_pkg_filter kubelet "$_version" | \
+                head -n 1)
 
             if [ -z "$_version" ] ; then
                 msg error "Failed to find the '${ONE_SERVICE_VERSION}' kubernetes version"
@@ -338,11 +341,10 @@ EOF
     esac
 
     msg info "Install kubernetes packages version: ${_version}"
-    if yum install -y --setopt=skip_missing_names_on_install=False \
-        --disableexcludes=kubernetes \
-        kubelet-${_version} kubeadm-${_version} kubectl-${_version}
+    if apt install -y \
+        kubelet=${_version} kubeadm=${_version} kubectl=${_version}
     then
-        yum -y versionlock kubelet kubeadm kubectl
+        apt-mark hold kubelet kubeadm kubectl
     else
         msg error "Kubernetes packages installation failed"
         exit 1
@@ -378,7 +380,7 @@ fetch_k8s_dashboard()
 {
     msg info "Downloading K8S UI dashboard manifest"
     curl -o /opt/one_k8n_manifests/kubernetes-dashboard.yaml \
-        https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended/kubernetes-dashboard.yaml
+        https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended.yaml
 }
 
 set_service_values()
@@ -625,7 +627,7 @@ setup_master()
     # forcing kubernetes to use interface with the advertised ip:
     # https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/#using-internal-ips-in-your-cluster
     # https://github.com/kubernetes/kubeadm/issues/203
-    cat > /etc/sysconfig/kubelet <<EOF
+    cat > /etc/default/kubelet <<EOF
 KUBELET_EXTRA_ARGS=--node-ip=${ONEAPP_K8S_ADDRESS}
 EOF
 
@@ -640,7 +642,8 @@ EOF
         --apiserver-bind-port "$ONEAPP_K8S_PORT" \
         --node-name "$ONEAPP_K8S_NODENAME" \
         --pod-network-cidr="${ONEAPP_K8S_PODS_NETWORK}" \
-        --skip-token-print --token-ttl 0
+        --skip-token-print --token-ttl 0 \
+        --ignore-preflight-errors "FileContent--proc-sys-net-bridge-bridge-nf-call-iptables"
 
     # pod network
     #msg info "Installing kube-router CNI manifest for pod networking"
@@ -678,7 +681,7 @@ setup_worker()
     # forcing kubernetes to use interface with the advertised ip:
     # https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/#using-internal-ips-in-your-cluster
     # https://github.com/kubernetes/kubeadm/issues/203
-    cat > /etc/sysconfig/kubelet <<EOF
+    cat > /etc/default/kubelet <<EOF
 KUBELET_EXTRA_ARGS=--node-ip=${_internal_ip}
 EOF
 
@@ -687,7 +690,8 @@ EOF
     msg info "Join the kubernetes cluster on: ${ONEAPP_K8S_ADDRESS}:${ONEAPP_K8S_PORT}"
     kubeadm join "${ONEAPP_K8S_ADDRESS}:${ONEAPP_K8S_PORT}" \
         --token "$ONEAPP_K8S_TOKEN" \
-        --discovery-token-ca-cert-hash "sha256:${ONEAPP_K8S_HASH}"
+        --discovery-token-ca-cert-hash "sha256:${ONEAPP_K8S_HASH}" \
+        --ignore-preflight-errors "FileContent--proc-sys-net-bridge-bridge-nf-call-iptables"
 }
 
 setup_kubectl()
@@ -735,20 +739,14 @@ bootstrap_kubernetes()
 postinstall_cleanup()
 {
     msg info "Delete cache and stored packages"
-    yum clean all
-    rm -rf /var/cache/yum
+    apt autoclean -y
+    apt clean cache
 }
 
 install_pkgs()
 {
-    msg info "Enable EPEL repository"
-    if ! yum install -y --setopt=skip_missing_names_on_install=False epel-release ; then
-        msg error "Failed to enable EPEL repository"
-        exit 1
-    fi
-
     msg info "Install required packages"
-    if ! yum install -y --setopt=skip_missing_names_on_install=False "${@}" ; then
+    if ! apt install -y "${@}" ; then
         msg error "Package(s) installation failed"
         exit 1
     fi
