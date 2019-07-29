@@ -20,3 +20,16 @@ devices:
     type: unix-char
 name: k8s
 ```
+
+Don't forget to add /etc/one-context.d/net-90-service-appliance
+```
+#!/usr/bin/env bash
+# Runs OpenNebula service appliances configuration & bootstrap script
+
+#TODO: just single run based on "status"
+_oneapp_service='/etc/one-appliance/service'
+if [ -x "${_oneapp_service}" ]; then
+    "${_oneapp_service}" configure && \
+        "${_oneapp_service}" bootstrap
+fi
+```
