@@ -1,3 +1,19 @@
+# ---------------------------------------------------------------------------- #
+# Copyright 2018-2019, OpenNebula Project, OpenNebula Systems                  #
+#                                                                              #
+# Licensed under the Apache License, Version 2.0 (the "License"); you may      #
+# not use this file except in compliance with the License. You may obtain      #
+# a copy of the License at                                                     #
+#                                                                              #
+# http://www.apache.org/licenses/LICENSE-2.0                                   #
+#                                                                              #
+# Unless required by applicable law or agreed to in writing, software          #
+# distributed under the License is distributed on an "AS IS" BASIS,            #
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.     #
+# See the License for the specific language governing permissions and          #
+# limitations under the License.                                               #
+# ---------------------------------------------------------------------------- #
+
 # Important notes #############################################################
 #
 # If 'ONEAPP_K8S_TOKEN' and 'ONEAPP_K8S_HASH' both are set then the appliance
@@ -20,12 +36,12 @@
 
 # List of contextualization parameters
 ONE_SERVICE_PARAMS=(
-    'ONEAPP_K8S_ADDRESS'            'configure' 'K8S master node address/network (CIDR subnet)'      'O|text'
-    'ONEAPP_K8S_TOKEN'              'configure' 'K8S token (to join node into the cluster)'          'O|password'
-    'ONEAPP_K8S_HASH'               'configure' 'K8S hash (to join node into the cluster)'           'O|text'
-    'ONEAPP_K8S_NODENAME'           'configure' 'K8S master node name'                               'O|text'
-    'ONEAPP_K8S_PORT'               'configure' 'K8S API port (default 6443)'                        'O|text'
-    'ONEAPP_K8S_PODS_NETWORK'       'configure' 'K8S pods network in CIDR (default 10.244.0.0/16)'   'O|text'
+    'ONEAPP_K8S_ADDRESS'            'configure' 'K8s master node address/network (CIDR subnet)'      'O|text'
+    'ONEAPP_K8S_TOKEN'              'configure' 'K8s token (to join node into the cluster)'          'O|password'
+    'ONEAPP_K8S_HASH'               'configure' 'K8s hash (to join node into the cluster)'           'O|text'
+    'ONEAPP_K8S_NODENAME'           'configure' 'K8s master node name'                               'O|text'
+    'ONEAPP_K8S_PORT'               'configure' 'K8s API port (default 6443)'                        'O|text'
+    'ONEAPP_K8S_PODS_NETWORK'       'configure' 'K8s pods network in CIDR (default 10.244.0.0/16)'   'O|text'
     'ONEAPP_K8S_ADMIN_USERNAME'     'configure' 'UI dashboard admin account (default admin-user)'    'O|text'
 )
 
@@ -94,6 +110,7 @@ ONEAPP_K8S_PODS_NETWORK="${ONEAPP_K8S_PODS_NETWORK:-10.244.0.0/16}"
 ONEAPP_K8S_ADMIN_USERNAME="${ONEAPP_K8S_ADMIN_USERNAME:-admin-user}"
 ONEAPP_DOCKER_EDITION="${ONEAPP_DOCKER_EDITION:-docker-ce}" # docker-ee
 ONEAPP_DOCKER_VERSION=${ONEAPP_DOCKER_VERSION:-18.09}
+ONEAPP_CALICO_VERSION=${ONEAPP_CALICO_VERSION:-3.8}
 ONEAPP_ONEFLOW_MASTER_ROLE="${ONEAPP_ONEFLOW_MASTER_ROLE:-master}"
 #ONEAPP_K8S_NODENAME
 #ONEAPP_K8S_ADDRESS
@@ -104,6 +121,7 @@ ONEAPP_ONEFLOW_MASTER_ROLE="${ONEAPP_ONEFLOW_MASTER_ROLE:-master}"
 ### Globals ###################################################################
 
 DEP_PKGS="coreutils openssh-server curl jq openssl ca-certificates apt-transport-https gnupg2 software-properties-common"
+K8S_MANIFEST_DIR="${ONE_SERVICE_SETUP_DIR}/kubernetes/"
 
 
 
@@ -133,9 +151,9 @@ service_install()
     install_kubernetes
     start_kubernetes
     create_k8s_manifest_dir
-    fetch_k8s_images
     fetch_k8s_network_plugin
     fetch_k8s_dashboard
+    fetch_k8s_images
     disable_kubernetes
 
     # service metadata
@@ -250,7 +268,7 @@ install_docker()
             ;;
     esac
 
-    msg info "Installing '${_edition}=${_version}'"
+    msg info "Installing '${_edition}-${_version}'"
     install_pkgs "${_edition}=${_version}" "${_edition}-cli=${_version}" "containerd.io"
     apt-mark hold "${_edition}" "${_edition}-cli" "containerd.io"
 }
@@ -354,33 +372,32 @@ install_kubernetes()
 create_k8s_manifest_dir()
 {
     msg info "Create directory for kubernetes manifest files"
-    mkdir -p /opt/one_k8n_manifests
+    mkdir -p "${K8S_MANIFEST_DIR}"
 }
 
 fetch_k8s_images()
 {
-    msg info "Pulling the kubernetes images"
+    msg info "Pulling the Kubernetes images"
     kubeadm config images pull
+
+    msg info "Pulling other images from manifests"
+    for image in $(cat "${K8S_MANIFEST_DIR}"/* | awk '{if ($1 ~ /image:/) print $2;}') ; do
+        docker pull "$image"
+    done
 }
 
 fetch_k8s_network_plugin()
 {
-    #msg info "Downloading kube-router manifest for CNI networking"
-    #curl -o /opt/one_k8n_manifests/kubeadm-kuberouter.yaml \
-    #    https://raw.githubusercontent.com/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter.yaml
-
     msg info "Downloading Canal (Calico+flannel) manifest for CNI networking"
-    curl -o /opt/one_k8n_manifests/canal.yaml \
-        https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/canal/canal.yaml
-    curl -o /opt/one_k8n_manifests/canal-rbac.yaml \
-        https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/canal/rbac.yaml
+    curl -o "${K8S_MANIFEST_DIR}"/canal.yaml \
+        https://docs.projectcalico.org/v${ONEAPP_CALICO_VERSION}/manifests/canal.yaml
 }
 
 fetch_k8s_dashboard()
 {
-    msg info "Downloading K8S UI dashboard manifest"
-    curl -o /opt/one_k8n_manifests/kubernetes-dashboard.yaml \
-        https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended.yaml
+    msg info "K8S UI dashboard is predownloaded as artifact"
+    mv -v /opt/one-appliance/kubernetes/dashboard-v2.0.0-beta1.yaml \
+        "${K8S_MANIFEST_DIR}"/kubernetes-dashboard.yaml
 }
 
 set_service_values()
@@ -591,7 +608,7 @@ print_ui_login_token()
 
 create_service_account()
 {
-    cat > /opt/one_k8n_manifests/kubernetes-service-account.yaml <<EOF
+    cat > "${K8S_MANIFEST_DIR}"/kubernetes-service-account.yaml <<EOF
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -599,7 +616,7 @@ metadata:
   namespace: kube-system
 EOF
 
-    cat > /opt/one_k8n_manifests/kubernetes-cluster-role.yaml <<EOF
+    cat > "${K8S_MANIFEST_DIR}"/kubernetes-cluster-role.yaml <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -615,8 +632,8 @@ subjects:
 EOF
 
     msg info "Creating the '${ONEAPP_K8S_ADMIN_USERNAME}' account"
-    kubectl apply -f /opt/one_k8n_manifests/kubernetes-service-account.yaml
-    kubectl apply -f /opt/one_k8n_manifests/kubernetes-cluster-role.yaml
+    kubectl apply -f "${K8S_MANIFEST_DIR}"/kubernetes-service-account.yaml
+    kubectl apply -f "${K8S_MANIFEST_DIR}"/kubernetes-cluster-role.yaml
 }
 
 setup_master()
@@ -646,18 +663,15 @@ EOF
         --ignore-preflight-errors "FileContent--proc-sys-net-bridge-bridge-nf-call-iptables"
 
     # pod network
-    #msg info "Installing kube-router CNI manifest for pod networking"
-    #kubectl apply -f /opt/one_k8n_manifests/kubeadm-kuberouter.yaml
     msg info "Installing Canal (Calico+flannel) manifest for pod networking"
-    sed -i "s#10.244.0.0/16#${ONEAPP_K8S_PODS_NETWORK}#g" /opt/one_k8n_manifests/canal.yaml
-    kubectl apply -f /opt/one_k8n_manifests/canal-rbac.yaml
-    kubectl apply -f /opt/one_k8n_manifests/canal.yaml
+    sed -i "s#10.244.0.0/16#${ONEAPP_K8S_PODS_NETWORK}#g" "${K8S_MANIFEST_DIR}"/canal.yaml
+    kubectl apply -f "${K8S_MANIFEST_DIR}"/canal.yaml
 
     # waiting for ready and healthy status of kubernetes
     wait_for_k8s
 
     msg info "Installing K8S's UI dashboard manifest"
-    kubectl apply -f /opt/one_k8n_manifests/kubernetes-dashboard.yaml
+    kubectl apply -f "${K8S_MANIFEST_DIR}"/kubernetes-dashboard.yaml
 
     # creates the admin user account to login to the dashboard
     create_service_account
