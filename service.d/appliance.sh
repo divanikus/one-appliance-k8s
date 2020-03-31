@@ -660,7 +660,7 @@ EOF
         --node-name "$ONEAPP_K8S_NODENAME" \
         --pod-network-cidr="${ONEAPP_K8S_PODS_NETWORK}" \
         --skip-token-print --token-ttl 0 \
-        --ignore-preflight-errors "FileContent--proc-sys-net-bridge-bridge-nf-call-iptables"
+        --ignore-preflight-errors "FileContent--proc-sys-net-bridge-bridge-nf-call-iptables,Swap"
 
     # pod network
     msg info "Installing Canal (Calico+flannel) manifest for pod networking"
@@ -696,7 +696,7 @@ setup_worker()
     # https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/#using-internal-ips-in-your-cluster
     # https://github.com/kubernetes/kubeadm/issues/203
     cat > /etc/default/kubelet <<EOF
-KUBELET_EXTRA_ARGS=--node-ip=${_internal_ip}
+KUBELET_EXTRA_ARGS=--node-ip=${_internal_ip} --fail-swap-on=false
 EOF
 
     # kubernetes
