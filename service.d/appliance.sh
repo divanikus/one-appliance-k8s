@@ -396,7 +396,7 @@ fetch_k8s_network_plugin()
 fetch_k8s_dashboard()
 {
     msg info "K8S UI dashboard is predownloaded as artifact"
-    mv -v /opt/one-appliance/kubernetes/dashboard-v2.0.0-beta1.yaml \
+    mv -v /opt/one-appliance/kubernetes/dashboard-v2.0.0-rc7.yaml \
         "${K8S_MANIFEST_DIR}"/kubernetes-dashboard.yaml
 }
 
