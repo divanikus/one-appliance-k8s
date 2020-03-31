@@ -645,7 +645,7 @@ setup_master()
     # https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/#using-internal-ips-in-your-cluster
     # https://github.com/kubernetes/kubeadm/issues/203
     cat > /etc/default/kubelet <<EOF
-KUBELET_EXTRA_ARGS=--node-ip=${ONEAPP_K8S_ADDRESS}
+KUBELET_EXTRA_ARGS=--node-ip=${ONEAPP_K8S_ADDRESS} --fail-swap-on=false
 EOF
 
     # set master node name
