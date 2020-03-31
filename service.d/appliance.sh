@@ -49,7 +49,7 @@ ONE_SERVICE_PARAMS=(
 ### Appliance metadata ########################################################
 
 ONE_SERVICE_NAME='Service Kubernetes - LXD'
-ONE_SERVICE_VERSION=1.15
+ONE_SERVICE_VERSION=1.18
 ONE_SERVICE_BUILD=$(date +%s)
 ONE_SERVICE_SHORT_DESCRIPTION='Appliance with preinstalled Kubernetes for LXD hosts'
 ONE_SERVICE_DESCRIPTION=$(cat <<EOF
@@ -109,8 +109,8 @@ ONEAPP_K8S_PORT="${ONEAPP_K8S_PORT:-6443}"
 ONEAPP_K8S_PODS_NETWORK="${ONEAPP_K8S_PODS_NETWORK:-10.244.0.0/16}"
 ONEAPP_K8S_ADMIN_USERNAME="${ONEAPP_K8S_ADMIN_USERNAME:-admin-user}"
 ONEAPP_DOCKER_EDITION="${ONEAPP_DOCKER_EDITION:-docker-ce}" # docker-ee
-ONEAPP_DOCKER_VERSION=${ONEAPP_DOCKER_VERSION:-18.09}
-ONEAPP_CALICO_VERSION=${ONEAPP_CALICO_VERSION:-3.8}
+ONEAPP_DOCKER_VERSION=${ONEAPP_DOCKER_VERSION:-19.03}
+ONEAPP_CALICO_VERSION=${ONEAPP_CALICO_VERSION:-3.13}
 ONEAPP_ONEFLOW_MASTER_ROLE="${ONEAPP_ONEFLOW_MASTER_ROLE:-master}"
 #ONEAPP_K8S_NODENAME
 #ONEAPP_K8S_ADDRESS
@@ -408,7 +408,7 @@ set_service_values()
     _K8S_JOIN_COMMAND=$(print_join_cred command)
     _K8S_TOKEN=$(print_join_cred token)
     _K8S_HASH=$(print_join_cred hash)
-    _K8S_UI_PROXY_URL='http://localhost:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/'
+    _K8S_UI_PROXY_URL='http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/'
 
     msg info "Waiting for UI dashboard secret.."
     _K8S_UI_LOGIN_TOKEN=$(print_ui_login_token)
