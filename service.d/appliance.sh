@@ -665,6 +665,7 @@ EOF
     # pod network
     msg info "Installing Canal (Calico+flannel) manifest for pod networking"
     sed -i "s#10.244.0.0/16#${ONEAPP_K8S_PODS_NETWORK}#g" "${K8S_MANIFEST_DIR}"/canal.yaml
+    sed -i 's#^\(\s*\)\(- name: FELIX_IPTABLESREFRESHINTERVAL\)#\1- name: FELIX_IPTABLESBACKEND\n\1  value: "NFT"\n\1\2#' "${K8S_MANIFEST_DIR}"/canal.yaml
     kubectl apply -f "${K8S_MANIFEST_DIR}"/canal.yaml
 
     # waiting for ready and healthy status of kubernetes
