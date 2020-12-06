@@ -740,8 +740,9 @@ wait_for_k8s()
         _healthy=''
         while [ "$_healthy" != Healthy ] ; do
             _healthy=$(LANG=C kubectl --kubeconfig=/etc/kubernetes/admin.conf \
-                get componentstatus --no-headers | awk '{print $2}' | sort -u)
-            sleep 1s
+                get componentstatus --no-headers | egrep -v 'scheduler|controller-manager' | \
+                awk '{print $2}' | sort -u)
+            sleep 5s
         done
     fi
 
