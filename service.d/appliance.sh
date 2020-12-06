@@ -144,6 +144,8 @@ service_install()
 
     # docker
     install_docker "$ONEAPP_DOCKER_EDITION"
+    stop_docker
+    configure_docker
     start_docker
     disable_docker
 
@@ -395,9 +397,9 @@ fetch_k8s_network_plugin()
 
 fetch_k8s_dashboard()
 {
-    msg info "K8S UI dashboard is predownloaded as artifact"
-    mv -v /opt/one-appliance/kubernetes/dashboard-v2.0.0-rc7.yaml \
-        "${K8S_MANIFEST_DIR}"/kubernetes-dashboard.yaml
+    msg info "Downloading K8S UI dashboard manifest"
+    curl -o "${K8S_MANIFEST_DIR}"/kubernetes-dashboard.yaml \
+        https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0/aio/deploy/recommended.yaml
 }
 
 set_service_values()
